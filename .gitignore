@@ -41,3 +41,8 @@ luac.out
 *.dSYM
 
 skynet
+# jupyter
+.ipynb_checkpoints
+
+.DS_Store
+

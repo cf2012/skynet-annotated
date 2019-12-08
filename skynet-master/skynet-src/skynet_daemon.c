@@ -9,6 +9,14 @@
 
 #include "skynet_daemon.h"
 
+/** 通过 pidfile 检查pid对应的进程是否存在
+ *		存在返回 pid, 不存在,返回0
+ * 流程:
+ * 1. pid文件是否存在,不存在返回0
+ * 2. 读取文件中的pid, 如果读不到返回0
+ * 3. 通过 kill -0 pid, 检查进程是否存在. 不存在返回0
+ * 4. 返回 pid
+*/
 static int
 check_pid(const char *pidfile) {
 	int pid = 0;
@@ -22,12 +30,25 @@ check_pid(const char *pidfile) {
 		return 0;
 	}
 
+	/** 检测 pid 对应的进程是否存在
+	 * 返回值: 0 成功; -1 失败, 	
+	 * RETURN VALUE
+	 * 	On  success  (at least one signal was sent), zero is returned.  On error, -1
+	 * 	is returned, and errno is set appropriately.
+	 * ERRORS
+	 * 	EINVAL An invalid signal was specified.
+	 * 	EPERM  The process does not have permission to send the signal to any of the
+	 * 		target processes.
+	 * 	ESRCH  The  pid  or  process  group  does  not exist. Note that an existing
+	 * 		process might be a zombie, a process which already committed termina‐tion, but has not yet been wait(2)ed for.
+	*/
 	if (kill(pid, 0) && errno == ESRCH)
 		return 0;
 
 	return pid;
 }
 
+/** 将 pid 写入文件 pidfile */
 static int
 write_pid(const char *pidfile) {
 	FILE *f;
@@ -43,6 +64,7 @@ write_pid(const char *pidfile) {
 		return 0;
 	}
 
+	// 加锁
 	if (flock(fd, LOCK_EX|LOCK_NB) == -1) {
 		int n = fscanf(f, "%d", &pid);
 		fclose(f);
@@ -54,6 +76,7 @@ write_pid(const char *pidfile) {
 		return 0;
 	}
 
+	// 写 pid
 	pid = getpid();
 	if (!fprintf(f,"%d\n", pid)) {
 		fprintf(stderr, "Can't write pid.\n");
@@ -65,6 +88,8 @@ write_pid(const char *pidfile) {
 	return pid;
 }
 
+/** 重定向 stdin, stdout, stderr 到 /dev/null, 即忽略
+*/
 static int
 redirect_fds() {
 	int nfd = open("/dev/null", O_RDWR);
